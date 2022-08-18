@@ -8,20 +8,8 @@ on:
         required: false
         default: deployment-assets
         type: string
-      AWS_IAM_ROLE:
-        description: "The name of the AWS role which will be assumed during asset deployment to AWS."
-        required: true
-        type: string
       AWS_REGION:
         description: "The name of the AWS region where assets will be deployed."
-        required: true
-        type: string
-      AWS_S3_BUCKET_NAME:
-        description: "The name of the AWS S3 bucket where assets will be deployed."
-        required: true
-        type: string
-      AWS_CLOUDFRONT_DISTRIBUTION_ID:
-        description: "The id of the AWS cloudfront distribution were invalidations will be created."
         required: true
         type: string
       MAX_CLOUDFRONT_INVALIDATIONS:
@@ -34,6 +22,17 @@ on:
         required: false
         type: boolean
         default: true
+
+    secrets:
+      AWS_IAM_ROLE:
+        description: "The name of the AWS role which will be assumed during asset deployment to AWS."
+        required: true
+      AWS_S3_BUCKET_NAME:
+        description: "The name of the AWS S3 bucket where assets will be deployed."
+        required: true
+      AWS_CLOUDFRONT_DISTRIBUTION_ID:
+        description: "The id of the AWS cloudfront distribution were invalidations will be created."
+        required: true
 
 jobs:
   publish-cf:
@@ -67,7 +66,7 @@ jobs:
         id: configure-credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          role-to-assume: ${{ inputs.AWS_IAM_ROLE }}
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
           aws-region: ${{ inputs.AWS_REGION }}
 
       # ---------------------------------------------------------------------------- #
@@ -78,8 +77,8 @@ jobs:
         working-directory: ${{steps.stage-assets.outputs.stage-directory}}
         env:
          MAX_CLOUDFRONT_INVALIDATIONS: ${{ inputs.MAX_CLOUDFRONT_INVALIDATIONS }}
-         AWS_S3_BUCKET_NAME: ${{ inputs.AWS_S3_BUCKET_NAME }}
-         AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ inputs.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+         AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+         AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
          INVALIDATE: ${{ inputs.INVALIDATE }}
         run: |
           # Helper function for printing messages before exiting with error.
