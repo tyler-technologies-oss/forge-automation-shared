@@ -42,4 +42,22 @@ The [publish-gh-pages](./.github/workflows/wf-publish-gh-pages.yml) workflow is 
 
 ## Versioning and Release
 
-**TBD**
+This project follows semver, and new releases are published via creating a new release in GitHub.
+
+## Using a workflow
+
+See the `uses` key from the snippet below for an example on how to properly reference a workflow. Take note of the version specified at the end.
+You can view versions and their release notes [here](https://github.com/tyler-technologies-oss/forge-automation-shared/releases).
+
+The following example of a job will use the [build-and-test](./.github/workflows/wf-build-and-test.yml) workflow to run a build in node and execute tests:
+
+```yaml
+build:
+  name: Build and Test
+  needs: wf-config
+  uses: tyler-technologies-oss/forge-automation-shared/.github/workflows/wf-build-and-test.yml@v1.0.0
+  with:
+    TESTS_ENABLED: true
+  secrets:
+    NPM_TOKEN: ${{ secrets.MY_NPM_TOKEN }}
+```
