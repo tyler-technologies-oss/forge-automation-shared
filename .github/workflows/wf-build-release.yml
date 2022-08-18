@@ -1,0 +1,254 @@
+name: Build and Release
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        description: "The version of Node to use when building the site."
+        default: "14"
+        required: false
+        type: string
+      PRODUCTION_RELEASE:
+        description: "Whether to setup the github actions environment for a production deployment."
+        type: boolean
+        required: true
+      BUILD_ENABLED:
+        description: "Whether to execute the 'build' phase of this workflow."
+        type: boolean
+        default: true
+        required: false
+      BUILD_NPM_SCRIPT:
+        description: "The npm script name which will be executed during the 'build' phase."
+        type: string
+        default: "build"
+        required: false
+      TESTS_ENABLED:
+        description: "Whether to execute the 'test' phase of this workflow."
+        type: boolean
+        default: false
+        required: false
+      TESTS_NPM_SCRIPT:
+        description: "The script name which will be executed during the tests phase."
+        type: string
+        default: "ci:test"
+        required: false
+      REQUIRE_TESTS_SUCCESS:
+        description: "Whether the release phase (if enabled) requires passing tests before executing."
+        type: boolean
+        default: true
+        required: false
+      RELEASE_ENABLED:
+        description: "Whether to execute the 'release' phase of this workflow."
+        type: boolean
+        default: true
+        required: false
+      RELEASE_NPM_SCRIPT:
+        description: "The npm script name which will be executed during the release phase."
+        type: string
+        default: "release"
+        required: false
+      PACKAGE_ASSETS_ENABLED:
+        description: "Whether to call the package assets script and upload package to workflow for later deployment."
+        type: boolean
+        default: false
+        required: false
+      PACKAGE_ASSETS_NPM_SCRIPT:
+        description: "The npm script name which will be used during the 'package' phase."
+        type: string
+        default: "ci:package"
+        required: false
+      PACKAGE_ASSETS_UPLOAD_NAME:
+        description: "The name of the uploaded assets from 'package' phase, this can be referenced in later deployment jobs."
+        type: string
+        default: "deployment-assets"
+        required: false
+      PACKAGE_ASSETS_ARCHIVE_PATH:
+        description: "The path to the packaged assets (*.tar.gz) archive file, relative to the root of the project."
+        type: string
+        default: "deployment-assets.tar.gz"
+        required: false
+      AUTO_ENABLED:
+        description: "Whether the 'Auto' framework is enabled for release and package management."
+        type: boolean
+        default: true
+        required: false
+
+    secrets:
+      GITHUB_APP_ID:
+        description: "The id of a GitHub App with permissions to write back to this repository as an administrator."
+        required: false
+      GITHUB_APP_KEY:
+        description: "The key of a GitHub App with permissions to write back to this repository as an administrator."
+        required: false
+      NPM_TOKEN:
+        description: "Token used to access the npm registry."
+        required: true
+      NPM_REGISTRY:
+        description: "The npm registry which will be used for publishing packages."
+        required: false
+      CANARY_PULL_NPM_REGISTRY:
+        description: "The npm registry which will be used for installing canary packages."
+        required: false
+      CHECKOUT_TOKEN:
+        description: "Token used by auto to access the repository."
+        required: false
+      ARTIFACTORY_USERNAME:
+        description: "Artifactory Username used to pull and push packages."
+        required: false
+
+jobs:
+  build-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set GitHub App Token
+        id: app-token
+        if: ${{ inputs.PRODUCTION_RELEASE }}
+        uses: tibdex/github-app-token@v1.5.0
+        with:
+          app_id: ${{ secrets.GITHUB_APP_ID }}
+          private_key: ${{ secrets.GITHUB_APP_KEY }}
+
+      - name: Checkout Repo with App
+        id: checkout-with-token
+        uses: actions/checkout@v2
+        if: steps.app-token.outcome == 'success'
+        with:
+          # Checkout with github apps token.
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+        if: steps.checkout-with-token.outcome == 'skipped'
+        with:
+          token: ${{ secrets.CHECKOUT_TOKEN }}
+
+      - name: Prepare Repository
+        # Fetch full git history and tags
+        run: git fetch --unshallow --tags
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        env:
+          NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install
+        id: install
+        env:
+          NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        run: |
+          npm ci
+
+      - name: Build
+        id: build
+        if: ${{ inputs.BUILD_ENABLED }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          BUILD_NPM_SCRIPT: "${{ inputs.BUILD_NPM_SCRIPT }}"
+        run: |
+          npm run "${BUILD_NPM_SCRIPT}"
+
+      - name: Test
+        id: test
+        if: ${{ inputs.TESTS_ENABLED }}
+        continue-on-error: ${{ fromJSON(env.CONTINUE_ON_ERROR) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          TESTS_NPM_SCRIPT: "${{ inputs.TESTS_NPM_SCRIPT }}"
+          CONTINUE_ON_ERROR: ${{ inputs.REQUIRE_TESTS_SUCCESS == 'false' }}
+        run: |
+          npm run "${TESTS_NPM_SCRIPT}"
+
+      - name: Release
+        id: release
+        if: ${{ inputs.RELEASE_ENABLED }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_REGISTRY: "${{ secrets.NPM_REGISTRY }}"
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          RELEASE_NPM_SCRIPT: "${{ inputs.RELEASE_NPM_SCRIPT }}"
+        run: |
+          if [[ -z ${NPM_REGISTRY} ]]; then
+            ## We are publishing to the public npm registry so set the public registry and auth token
+            export npm_config_registry="https://registry.npmjs.org/"
+            npm config set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
+          else
+            ## We are publishing to a private npm registry so set the provided registry
+            export npm_config_registry=${NPM_REGISTRY}
+          fi
+          export npm_config_access=public
+          npm run "${RELEASE_NPM_SCRIPT}"
+      
+        # This PR step is designed to update the existing PR comment to ensure we add that registry url
+        # to the yarn/npm commands so people can test packages from their PRs.
+      - name: Update Canary Comment
+        if: ${{ github.event_name == 'pull_request' && steps.release.outcome != 'skipped' && inputs.AUTO_ENABLED }}
+        env:
+          NPM_REGISTRY: "${{ secrets.NPM_REGISTRY }}"
+          CANARY_PULL_NPM_REGISTRY: "${{ secrets.CANARY_PULL_NPM_REGISTRY || secrets.NPM_REGISTRY }}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ "${NPM_REGISTRY}" == *"scratch-npm"* ]]; then
+            # Check for canary instructions in PR body and strip/ignore auto's hidden discovery lines
+            body=$(gh pr view "${PR_NUMBER}" --json body \
+              --jq .body |
+              sed -n '/<!-- GITHUB_RELEASE PR BODY: canary-version -->/,/<!-- GITHUB_RELEASE PR BODY: canary-version -->/{//!p;}
+              ')
+            if [ -n "$body" ]; then
+              body=$(echo "$body" | sed -e "/^\s*\(npm install\|yarn add\).*--registry\s.*\$/ s/\--registry\s.*//" \
+                                        -e "/^\s*\(npm install\|yarn add\)/ s#\$# --registry ${CANARY_PULL_NPM_REGISTRY}#")
+              npx auto pr-body --context "canary-version" --message "$body"
+            fi
+            # Check for canary instructions in PR comments and strip/ignore auto's hidden discovery lines
+            comment=$(
+              gh pr view "${PR_NUMBER}" --json comments \
+                --jq '.comments[] | select(.body | startswith("<!-- GITHUB_RELEASE COMMENT: canary-version -->")).body' |
+                sed '/<!-- GITHUB_RELEASE COMMENT: canary-version -->/d'
+            )
+            if [ -n "$comment" ]; then
+              comment=$(echo "$comment" | sed "/^\s*\(npm install\|yarn add\)/ s#\$# --registry ${CANARY_PULL_NPM_REGISTRY}#")
+              npx auto comment --context "canary-version" --delete
+              npx auto comment --context "canary-version" --message "$comment"
+            fi
+          fi
+      
+      - name: Package Assets
+        if: ${{ inputs.PACKAGE_ASSETS_ENABLED }}
+        id: package-assets
+        env:
+          PACKAGE_ASSETS_NPM_SCRIPT: "${{ inputs.PACKAGE_ASSETS_NPM_SCRIPT }}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        run: |
+          npm run "${PACKAGE_ASSETS_NPM_SCRIPT}"
+
+      - name: Upload assets for deploy
+        uses: actions/upload-artifact@v2
+        if: steps.package-assets.outcome == 'success'
+        with:
+          name: ${{ inputs.PACKAGE_ASSETS_UPLOAD_NAME }}
+          path: ${{ inputs.PACKAGE_ASSETS_ARCHIVE_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+    
+    outputs:
+      PACKAGE_ASSETS_CREATED: ${{ inputs.PACKAGE_ASSETS_ENABLED }}
+      PACKAGE_ASSETS_UPLOAD_NAME: ${{ inputs.PACKAGE_ASSETS_UPLOAD_NAME }}

@@ -1,0 +1,49 @@
+name: Cleanup GitHub Pages Pull Request
+
+on:
+  workflow_call:
+    inputs:
+      GITHUB_PAGES_BRANCH:
+        description: "The branch that GitHub Pages is configured with."
+        type: string
+        default: "gh-pages"
+        required: false
+
+    secrets:
+      GITHUB_ACCESS_TOKEN:
+        description: "GitHub Token used to access the repository."
+        required: true
+
+jobs:
+  cleanup-gh-pages-pr:
+    name: Cleanup GitHub Pages Deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          token: ${{ secrets.GITHUB_ACCESS_TOKEN }}
+          ref: ${{ inputs.GITHUB_PAGES_BRANCH }}
+
+      - name: Remove docs/${{ github.head_ref }} Folder
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "GitHub Actions"
+          
+          if [ -d "docs/$PR_NAME" ]; then
+              echo "Directory docs/$PR_NAME exists"
+              rm -rf docs/$PR_NAME
+              git add docs/$PR_NAME
+              git commit -m "[GitHub Actions] Remove Pull Request GitHub Pages build for branch $PR_NAME [skip ci]"
+          else
+              echo "Directory docs/$PR_NAME does not exists. Skipping deletion."
+          fi
+        env:
+          PR_NAME: ${{ github.head_ref }}
+
+      - name: Push Changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_ACCESS_TOKEN }}
+          branch: ${{ inputs.GITHUB_PAGES_BRANCH }}

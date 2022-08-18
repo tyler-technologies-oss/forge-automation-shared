@@ -1,0 +1,156 @@
+name: Publish Cloudfront Assets
+
+on:
+  workflow_call:
+    inputs:
+      ARTIFACT_NAME:
+        description: "The name of the asset that was uploaded via actions/upload-artifact."
+        required: false
+        default: deployment-assets
+        type: string
+      AWS_IAM_ROLE:
+        description: "The name of the AWS role which will be assumed during asset deployment to AWS."
+        required: true
+        type: string
+      AWS_REGION:
+        description: "The name of the AWS region where assets will be deployed."
+        required: true
+        type: string
+      AWS_S3_BUCKET_NAME:
+        description: "The name of the AWS S3 bucket where assets will be deployed."
+        required: true
+        type: string
+      AWS_CLOUDFRONT_DISTRIBUTION_ID:
+        description: "The id of the AWS cloudfront distribution were invalidations will be created."
+        required: true
+        type: string
+      MAX_CLOUDFRONT_INVALIDATIONS:
+        description: "The maximum number paths which can be individually invalidated in a single request."
+        required: false
+        type: number
+        default: 25
+      INVALIDATE:
+        description: "Whether we submit a CloudFront invalidation for the uploaded assets or not."
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  publish-cf:
+    name: Publish Cloudfront Assets
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      actions: read
+      
+    steps:
+
+      - name: Download Assets from Build Job
+        id: download-assets
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ inputs.ARTIFACT_NAME }}
+          path: ${{ inputs.ARTIFACT_NAME }}
+
+      - name: Stage Assets
+        id: stage-assets
+        working-directory: ${{steps.download-assets.outputs.download-path}}
+        run: |
+          mkdir -p staged
+          tar -xvf ${{ inputs.ARTIFACT_NAME }}.tar.gz -C staged
+          echo "::set-output name=stage-directory::${{steps.download-assets.outputs.download-path}}/staged"
+
+      # ---------------------------------------------------------------------------- #
+      #                           Configure AWS Credentials                          #
+      # ---------------------------------------------------------------------------- #
+      - name: Configure AWS Credentials
+        id: configure-credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ inputs.AWS_IAM_ROLE }}
+          aws-region: ${{ inputs.AWS_REGION }}
+
+      # ---------------------------------------------------------------------------- #
+      #               Sync to S3 and invalidate CloudFront distribution              #
+      # ---------------------------------------------------------------------------- #
+      - name: Deploy to AWS
+        id: deploy-assets
+        working-directory: ${{steps.stage-assets.outputs.stage-directory}}
+        env:
+         MAX_CLOUDFRONT_INVALIDATIONS: ${{ inputs.MAX_CLOUDFRONT_INVALIDATIONS }}
+         AWS_S3_BUCKET_NAME: ${{ inputs.AWS_S3_BUCKET_NAME }}
+         AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ inputs.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+         INVALIDATE: ${{ inputs.INVALIDATE }}
+        run: |
+          # Helper function for printing messages before exiting with error.
+          die() {
+            local _ret="${2:-1}"
+            echo "$1" >&2
+            exit "${_ret}"
+          }
+
+          # Deploy new/updated assets to the S3 bucket using a size-only comparison (and ignoring differing timestamps).
+          echo "Starting S3 Sync of CDN Assets to bucket: ${AWS_S3_BUCKET_NAME}"
+          echo "::group::S3 Sync Results"
+          aws s3 sync . s3://${AWS_S3_BUCKET_NAME} --size-only --no-progress | tee >(awk '{print $2;}' >../uploaded-files.txt)
+          echo "::endgroup::"
+          echo "Completed S3 Sync of CDN Assets ${AWS_S3_BUCKET_NAME}."
+          echo "Number of files created/updated: $(wc -l <"../uploaded-files.txt" | awk '{print $1}')"
+
+          # We only invalidate the paths if configured to do so (it's useful to ignore invalidation if we only pushing new files)
+          if [[ ${INVALIDATE} == "true" ]]; then
+            # Generate CloudFront Invalidation calls based on 'max_cloudfront_invalidations' parameter.
+            # CloudFront offers 1000 free invalidations/month. If the number of invalidations exceeds
+            # our provided maximum, we convert to path-based invalidations with wildcards.
+            cd ..
+            invalidation_list="$(<uploaded-files.txt)"
+            if [ -s uploaded-files.txt ]; then
+              if [ "$(echo "$invalidation_list" | wc -l)" -gt ${MAX_CLOUDFRONT_INVALIDATIONS} ]; then
+                while [ "$(echo "$invalidation_list" | wc -l)" -gt ${MAX_CLOUDFRONT_INVALIDATIONS} ]; do
+                  invalidation_list=$(echo "$invalidation_list" | xargs dirname | uniq | grep -vxF '.')
+                done
+                invalidation_list=$(echo "$invalidation_list" | awk '{print $0"/*"}')
+              fi
+              echo "::group::Invalidation Paths"
+              echo "Invalidations will be generated for the following paths:"
+              echo "$invalidation_list" | uniq
+              echo "::endgroup::"
+
+              # Cloudfront only allows 3k invalidations to be active at a time. While this function doesn't account
+              # for in-flight invalidations generated outside this workflow, we at least attempt to be conscious of this
+              # limit for locally-generated invalidations (assuming $MAX_CLOUDFRONT_INVALIDATIONS is set to a much higher value than its default)
+
+              mkdir -p invalidations
+              echo "$invalidation_list" | awk '$0="/"$0' | split -l 3000 - invalidations/
+              split_files=(./invalidations/*)
+              number_batches="${#split_files[@]}"
+              counter=1
+              for f in "${split_files[@]}"; do
+                total_invalidations=$(wc -l <"$f" | awk '{print $1}')
+                caller_reference="$GITHUB_ACTION:$(date +%Y-%m-%dT%H:%M:%S%z)"
+                if jq --raw-input --slurp 'sub("\n$";"") | split("\n")' "$f" | jq '{"Paths": {"Quantity": '"$total_invalidations"', "Items": .}, "CallerReference": "'"$caller_reference":'"}' >invalidation.json; then
+                  # Generate each cloudfront invalidation request, then watch/wait for it to complete before moving on.
+                  echo "Creating Cloudfront invalidation batch $counter of $number_batches on distribution: '${AWS_CLOUDFRONT_DISTRIBUTION_ID}'"
+                  invalidation_id=$(aws cloudfront create-invalidation \
+                    --distribution-id ${AWS_CLOUDFRONT_DISTRIBUTION_ID} \
+                    --invalidation-batch file://invalidation.json |
+                    jq -r .Invalidation.Id) &&
+                    # We only need to wait if we've exceeded the 3k limit.
+                    if ((number_batches > 1)); then
+                      echo "Waiting for cloudfront invalidation: '$invalidation_id' to complete on distribution: '${AWS_CLOUDFRONT_DISTRIBUTION_ID}'"
+                      aws cloudfront wait invalidation-completed \
+                        --distribution-id ${AWS_CLOUDFRONT_DISTRIBUTION_ID} \
+                        --id "$invalidation_id" &&
+                        echo "Cloudfront invalidation: '$invalidation_id' complete on distribution: '${AWS_CLOUDFRONT_DISTRIBUTION_ID}'"
+                    fi
+                  ((counter++))
+                else
+                  die "Unable to generate invalidation.json batch file." 1
+                fi
+              done
+            else
+              echo "Skipping Cloudfront invalidation as no remote assets were modified."
+            fi
+          else
+            echo "CloudFront invalidation set to false. Skipping."
+          fi

@@ -1,0 +1,100 @@
+## This shared workflow is intended to be used for gathering configuration as the first step in
+## a larger workflow process where subsequent jobs depend on outputs from this configuration job.
+
+name: Workflow Configuration
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        description: "The version of Node to use when building the site."
+        default: "14"
+        required: false
+        type: string
+      FILE_FILTERS:
+        description: "The file filters to pass to dorny/paths-filter `filter` action."
+        required: true
+        type: string
+
+    secrets:
+      NPM_TOKEN:
+        description: "The npm token used to pull and push packages."
+        required: true
+      ARTIFACTORY_USERNAME:
+        description: "Artifactory Username used to pull and push packages."
+        required: false
+
+jobs:
+  wf-config:
+    name: Evaluate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Prepare Repository
+        # Fetch full git history and tags
+        run: git fetch --unshallow --tags
+
+      - name: Cache Dependencies
+        id: cache
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        env:
+          NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        with:
+          node-version: "14"
+
+      - name: Install
+        id: install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        run: npm ci
+
+      ## Determine if this is a release build or not, which will affect which dependent jobs run below
+      - name: Detect Auto Release Status
+        id: detect-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        run: |
+          ## We use `auto version` to calculate whether this is a release build or not
+          VERSION_RESULT=$(npx auto version)
+          echo "Version calculation result: ${VERSION_RESULT}"
+          if [[ "${VERSION_RESULT}" =~ ^(major|minor|patch|release)$ ]]; then
+            echo "Release: true"
+            echo "::set-output name=release::true"
+          else
+            echo "Release: false"
+            echo "::set-output name=release::false"
+          fi
+
+      ## Detect if any specific files we care about have changed to help us know if we need to
+      ## execute a CI build or Storybook deployment at all or not
+      - name: Check File Changes
+        uses: dorny/paths-filter@v2
+        id: file-filter
+        with:
+          filters: ${{ inputs.FILE_FILTERS }}
+
+    outputs:
+      is-release: ${{ steps.detect-release.outputs.release }}
+      file-changes: ${{ steps.file-filter.outputs.changes }}

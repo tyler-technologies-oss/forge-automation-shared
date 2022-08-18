@@ -1,0 +1,49 @@
+name: Auto Pull Request Validation
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        description: "The version of Node to use when building the site."
+        default: "14"
+        required: false
+        type: string
+    secrets:
+      NPM_TOKEN:
+        description: "npm token used to pull and push packages"
+        required: false
+      ARTIFACTORY_USERNAME:
+        description: "Artifactory Username used to pull and push packages"
+        required: false
+
+jobs:
+  pr-validation:
+    name: Pull Request Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Prepare Repository
+        # Fetch full git history and tags
+        run: git fetch --unshallow --tags
+
+      - name: Setup Node
+        uses: actions/setup-node@v2
+        env:
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: PR Check
+        id: pr-check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          PR_NUMBER: ${{github.event.pull_request.number}}
+        run: |
+          npm ci
+          npx auto pr-check --url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}" --pr ${PR_NUMBER}

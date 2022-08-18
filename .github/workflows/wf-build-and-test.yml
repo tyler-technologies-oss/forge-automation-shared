@@ -1,0 +1,101 @@
+## This shared workflow is intended to be used when you only need to build an npm package and/or
+## run tests, commonly triggered on pull requests. If you need to trigger a production release
+## flow, take a look at "wf-build-release.yml" which encapsulates the same steps but also adds
+## additional support for publishing releases and deploying assets to S3 (optional).
+
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        description: "The version of Node to use when building the site."
+        default: "14"
+        required: false
+        type: string
+      BUILD_ENABLED:
+        description: "Whether to execute the 'build' phase of this workflow."
+        type: boolean
+        default: true
+        required: false
+      BUILD_NPM_SCRIPT:
+        description: "The npm script name which will be executed during the 'build' phase."
+        type: string
+        default: "build"
+        required: false
+      TESTS_ENABLED:
+        description: "Whether to execute the 'test' phase of this workflow."
+        type: boolean
+        default: false
+        required: false
+      TESTS_NPM_SCRIPT:
+        description: "The script name which will be executed during the tests phase."
+        type: string
+        default: "ci:test"
+        required: false
+      REQUIRE_TESTS_SUCCESS:
+        description: "Whether the release phase (if enabled) requires passing tests before executing."
+        type: boolean
+        default: true
+        required: false
+
+    secrets:
+      NPM_TOKEN:
+        description: "Token used to access the npm registry."
+        required: true
+      ARTIFACTORY_USERNAME:
+        description: "Artifactory Username used to pull and push packages."
+        required: false
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        env:
+          NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+
+      - name: Install
+        id: install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        run: |
+          npm ci
+
+      - name: Build
+        id: build
+        if: ${{ inputs.BUILD_ENABLED }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          BUILD_NPM_SCRIPT: "${{ inputs.BUILD_NPM_SCRIPT }}"
+        run: |
+          npm run "${BUILD_NPM_SCRIPT}"
+
+      - name: Test
+        id: test
+        if: ${{ inputs.TESTS_ENABLED }}
+        continue-on-error: ${{ fromJSON(env.CONTINUE_ON_ERROR) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          TESTS_NPM_SCRIPT: "${{ inputs.TESTS_NPM_SCRIPT }}"
+          CONTINUE_ON_ERROR: ${{ inputs.REQUIRE_TESTS_SUCCESS == 'false' }}
+        run: |
+          npm run "${TESTS_NPM_SCRIPT}"

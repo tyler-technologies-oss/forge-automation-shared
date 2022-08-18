@@ -1,0 +1,151 @@
+name: Publish GitHub Pages
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        description: "The version of Node to use when building the site."
+        default: "14"
+        required: false
+        type: string
+      PRODUCTION_RELEASE:
+        description: "Whether to setup the github actions environment for a production deployment."
+        type: boolean
+        required: true
+      BUILD_ENABLED:
+        description: "Whether to execute the 'build' phase of this workflow."
+        type: boolean
+        default: true
+        required: false
+      BUILD_NPM_SCRIPT:
+        description: "The npm script name which will be executed during the 'build' phase."
+        type: string
+        required: true
+      BUILD_DIRECTORY:
+        description: "The name of the directory that the 'build' phase generates assets to."
+        type: string
+        required: true
+      BUILD_TARGET_DIRECTORY:
+        description: "The name of the directory within the 'gh-pages' branch that our build assets should be deployed to."
+        type: string
+        required: true
+      CACHE_ENABLED:
+        description: "Whether to cache dependencies during the 'build' phase of this workflow."
+        type: boolean
+        default: true
+        required: false
+      PR_COMMENT_HEADER:
+        description: "The header text to display in the Pull Request comment after a successful incremental deployment."
+        type: string
+        default: "View Deployment:"
+        required: false
+
+    secrets:
+      GITHUB_DEPLOY_TOKEN:
+        description: "GitHub Token used to deploy to GitHub Pages"
+        required: true
+      NPM_TOKEN:
+        description: "Token used to access the npm registry."
+        required: true
+      ARTIFACTORY_USERNAME:
+        description: "Artifactory Username used to pull packages"
+        required: false
+
+jobs:
+  publish-gh-pages:
+    name: Publish GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      
+      - name: Cache Dependencies
+        id: cache
+        if: ${{ inputs.CACHE_ENABLED }}
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        env:
+          NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Dependencies (No Cache)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+
+      - name: Install Dependencies (Cache)
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: |
+          npm i
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+
+      - name: Build 🔧
+        id: build
+        if: ${{ inputs.BUILD_ENABLED }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
+          BUILD_NPM_SCRIPT: "${{ inputs.BUILD_NPM_SCRIPT }}"
+        run: |
+          npm run "${BUILD_NPM_SCRIPT}"
+
+      - name: Deploy 🚀
+        if: ${{ inputs.BUILD_ENABLED }}
+        uses: JamesIves/github-pages-deploy-action@3.6.2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_DEPLOY_TOKEN }}
+          BRANCH: gh-pages
+          FOLDER: ${{ inputs.BUILD_DIRECTORY }}
+          CLEAN: true
+          TARGET_FOLDER: ${{ inputs.BUILD_TARGET_DIRECTORY }}
+
+      - name: Find Comment
+        if: ${{ inputs.BUILD_ENABLED && ! inputs.PRODUCTION_RELEASE }}
+        uses: peter-evans/find-comment@v2
+        id: fc
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: ${{ inputs.PR_COMMENT_HEADER }}
+
+      - name: Create comment
+        if: ${{ inputs.BUILD_ENABLED && ! inputs.PRODUCTION_RELEASE && steps.fc.outputs.comment-id == '' }}
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            **${{ inputs.PR_COMMENT_HEADER }}**
+            [${{env.PR_NAME}}](https://${{ env.ORG_NAME }}.github.io/${{ env.REPO_NAME }}/${{ env.PR_NAME }})
+          reactions: rocket
+        env:
+          ORG_NAME: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NAME: ${{ github.event.pull_request.head.ref }}
