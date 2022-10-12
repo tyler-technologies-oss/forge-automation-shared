@@ -10,7 +10,7 @@ on:
     inputs:
       NODE_VERSION:
         description: "The version of Node to use when building the site."
-        default: "14"
+        default: "16"
         required: false
         type: string
       BUILD_ENABLED:

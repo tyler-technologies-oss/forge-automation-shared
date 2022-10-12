@@ -8,7 +8,7 @@ on:
     inputs:
       NODE_VERSION:
         description: "The version of Node to use when building the site."
-        default: "14"
+        default: "16"
         required: false
         type: string
       FILE_FILTERS:
@@ -56,7 +56,7 @@ jobs:
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
         with:
-          node-version: "14"
+          node-version: "16"
 
       - name: Install
         id: install
