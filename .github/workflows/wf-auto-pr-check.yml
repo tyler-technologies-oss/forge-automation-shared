@@ -50,5 +50,5 @@ jobs:
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           PR_NUMBER: ${{github.event.pull_request.number}}
         run: |
-          npm "${{ inputs.NPM_INSTALL_COMMAND }}"
+          npm ${{ inputs.NPM_INSTALL_COMMAND }}
           npx auto pr-check --url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}" --pr ${PR_NUMBER}
