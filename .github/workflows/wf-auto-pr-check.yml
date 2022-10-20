@@ -8,6 +8,11 @@ on:
         default: "16"
         required: false
         type: string
+      NPM_INSTALL_COMMAND:
+        description: "The npm command used to install dependencies."
+        type: string
+        default: "ci"
+        required: false
     secrets:
       NPM_TOKEN:
         description: "npm token used to pull and push packages"
@@ -45,5 +50,5 @@ jobs:
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           PR_NUMBER: ${{github.event.pull_request.number}}
         run: |
-          npm ci
+          npm "${{ inputs.NPM_INSTALL_COMMAND }}"
           npx auto pr-check --url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}" --pr ${PR_NUMBER}
