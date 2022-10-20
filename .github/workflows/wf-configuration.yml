@@ -38,7 +38,7 @@ jobs:
 
       - name: Cache Dependencies
         id: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         env:
           cache-name: cache-node-modules
         with:
@@ -50,13 +50,13 @@ jobs:
             ${{ runner.os }}-
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         env:
           NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
         with:
-          node-version: "16"
+          node-version: ${{ inputs.NODE_VERSION }}
 
       - name: Install
         id: install
@@ -81,10 +81,10 @@ jobs:
           echo "Version calculation result: ${VERSION_RESULT}"
           if [[ "${VERSION_RESULT}" =~ ^(major|minor|patch|release)$ ]]; then
             echo "Release: true"
-            echo "::set-output name=release::true"
+            echo "RELEASE=true" >> $GITHUB_OUTPUT
           else
             echo "Release: false"
-            echo "::set-output name=release::false"
+            echo "RELEASE=false" >> $GITHUB_OUTPUT
           fi
 
       ## Detect if any specific files we care about have changed to help us know if we need to
@@ -96,5 +96,5 @@ jobs:
           filters: ${{ inputs.FILE_FILTERS }}
 
     outputs:
-      is-release: ${{ steps.detect-release.outputs.release }}
+      is-release: ${{ steps.detect-release.outputs.RELEASE }}
       file-changes: ${{ steps.file-filter.outputs.changes }}

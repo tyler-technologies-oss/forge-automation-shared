@@ -104,21 +104,21 @@ jobs:
       - name: Set GitHub App Token
         id: app-token
         if: ${{ inputs.PRODUCTION_RELEASE }}
-        uses: tibdex/github-app-token@v1.5.0
+        uses: tibdex/github-app-token@v1
         with:
           app_id: ${{ secrets.GITHUB_APP_ID }}
           private_key: ${{ secrets.GITHUB_APP_KEY }}
 
       - name: Checkout Repo with App
         id: checkout-with-token
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         if: steps.app-token.outcome == 'success'
         with:
           # Checkout with github apps token.
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout Repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         if: steps.checkout-with-token.outcome == 'skipped'
         with:
           token: ${{ secrets.CHECKOUT_TOKEN }}
@@ -241,7 +241,7 @@ jobs:
           npm run "${PACKAGE_ASSETS_NPM_SCRIPT}"
 
       - name: Upload assets for deploy
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: steps.package-assets.outcome == 'success'
         with:
           name: ${{ inputs.PACKAGE_ASSETS_UPLOAD_NAME }}
