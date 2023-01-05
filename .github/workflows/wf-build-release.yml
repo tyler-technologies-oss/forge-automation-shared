@@ -146,6 +146,9 @@ jobs:
         run: |
           npm ci
 
+      - name: Check Git Status
+        uses: numtide/clean-git-action@v1
+
       - name: Build
         id: build
         if: ${{ inputs.BUILD_ENABLED }}
