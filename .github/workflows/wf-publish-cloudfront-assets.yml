@@ -46,7 +46,7 @@ jobs:
 
       - name: Download Assets from Build Job
         id: download-assets
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: ${{ inputs.ARTIFACT_NAME }}
           path: ${{ inputs.ARTIFACT_NAME }}
@@ -57,14 +57,14 @@ jobs:
         run: |
           mkdir -p staged
           tar -xvf ${{ inputs.ARTIFACT_NAME }}.tar.gz -C staged
-          echo "::set-output name=stage-directory::${{steps.download-assets.outputs.download-path}}/staged"
+          echo "stage-directory=${{steps.download-assets.outputs.download-path}}/staged" >> $GITHUB_OUTPUT
 
       # ---------------------------------------------------------------------------- #
       #                           Configure AWS Credentials                          #
       # ---------------------------------------------------------------------------- #
       - name: Configure AWS Credentials
         id: configure-credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v1-node16
         with:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
           aws-region: ${{ inputs.AWS_REGION }}
