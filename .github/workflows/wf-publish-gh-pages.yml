@@ -39,6 +39,10 @@ on:
         type: string
         default: "View Deployment:"
         required: false
+      PR_PATH:
+        description: "The deployment path relative to the GitHub Pages root."
+        type: string
+        required: false
 
     secrets:
       GITHUB_DEPLOY_TOKEN:
@@ -143,9 +147,9 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
             **${{ inputs.PR_COMMENT_HEADER }}**
-            [${{env.PR_NAME}}](https://${{ env.ORG_NAME }}.github.io/${{ env.REPO_NAME }}/${{ env.PR_NAME }})
+            [${{ env.PR_PATH }}](https://${{ env.ORG_NAME }}.github.io/${{ env.REPO_NAME }}/${{ env.PR_PATH }})
           reactions: rocket
         env:
           ORG_NAME: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
-          PR_NAME: ${{ github.event.pull_request.head.ref }}
+          PR_PATH: ${{ inputs.PR_PATH || github.event.pull_request.head.ref }}
