@@ -8,6 +8,10 @@ on:
         type: string
         default: "gh-pages"
         required: false
+      PR_PATH:
+        description: "The deployment path relative to the GitHub Pages root."
+        type: string
+        required: false
 
     secrets:
       GITHUB_ACCESS_TOKEN:
@@ -26,21 +30,21 @@ jobs:
           token: ${{ secrets.GITHUB_ACCESS_TOKEN }}
           ref: ${{ inputs.GITHUB_PAGES_BRANCH }}
 
-      - name: Remove docs/${{ github.head_ref }} Folder
+      - name: Remove docs/pr/${{ inputs.PR_PATH || github.head_ref }} Folder
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "GitHub Actions"
           
           if [ -d "docs/$PR_NAME" ]; then
               echo "Directory docs/$PR_NAME exists"
-              rm -rf docs/$PR_NAME
-              git add docs/$PR_NAME
+              rm -rf docs/pr/$PR_NAME
+              git add docs/pr/$PR_NAME
               git commit -m "[GitHub Actions] Remove Pull Request GitHub Pages build for branch $PR_NAME [skip ci]"
           else
-              echo "Directory docs/$PR_NAME does not exists. Skipping deletion."
+              echo "Directory docs/pr/$PR_NAME does not exists. Skipping deletion."
           fi
         env:
-          PR_NAME: ${{ github.head_ref }}
+          PR_NAME: ${{ inputs.PR_PATH || github.head_ref }}
 
       - name: Push Changes
         uses: ad-m/github-push-action@master
