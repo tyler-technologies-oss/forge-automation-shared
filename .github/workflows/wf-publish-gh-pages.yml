@@ -8,10 +8,20 @@ on:
         default: "16"
         required: false
         type: string
+      DEPLOY_BRANCH:
+        description: "The branch to deploy to. Defaults to: gh-pages"
+        default: "gh-pages"
+        required: false
+        type: string
       PRODUCTION_RELEASE:
         description: "Whether to setup the github actions environment for a production deployment."
         type: boolean
         required: true
+      CLEAN_DEPLOY:
+        description: "Whether to clean the deployment target directory before deploying."
+        type: boolean
+        default: true
+        required: false
       BUILD_ENABLED:
         description: "Whether to execute the 'build' phase of this workflow."
         type: boolean
@@ -123,13 +133,13 @@ jobs:
 
       - name: Deploy 🚀
         if: ${{ inputs.BUILD_ENABLED }}
-        uses: JamesIves/github-pages-deploy-action@3.6.2
+        uses: JamesIves/github-pages-deploy-action@4.4.1
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_DEPLOY_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: ${{ inputs.BUILD_DIRECTORY }}
-          CLEAN: true
-          TARGET_FOLDER: ${{ inputs.BUILD_TARGET_DIRECTORY }}
+          token: ${{ secrets.GITHUB_DEPLOY_TOKEN }}
+          branch: ${{ inputs.DEPLOY_BRANCH }}
+          folder: ${{ inputs.BUILD_DIRECTORY }}
+          clean: ${{ inputs.CLEAN_DEPLOY }}
+          target-folder: ${{ inputs.BUILD_TARGET_DIRECTORY }}
 
       - name: Find Comment
         if: ${{ inputs.BUILD_ENABLED && ! inputs.PRODUCTION_RELEASE }}
