@@ -75,7 +75,7 @@ jobs:
           npm ci
 
       - name: Check Git Status
-        uses: numtide/clean-git-action@v1
+        uses: numtide/clean-git-action@3d1ca34ae188e807ec16c778588acfe619074053
 
       - name: Build
         id: build

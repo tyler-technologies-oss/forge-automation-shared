@@ -143,11 +143,10 @@ jobs:
           NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
-        run: |
-          npm ci
+        run: npm ci
 
       - name: Check Git Status
-        uses: numtide/clean-git-action@v1
+        uses: numtide/clean-git-action@3d1ca34ae188e807ec16c778588acfe619074053
 
       - name: Build
         id: build
@@ -172,8 +171,7 @@ jobs:
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           TESTS_NPM_SCRIPT: "${{ inputs.TESTS_NPM_SCRIPT }}"
           CONTINUE_ON_ERROR: ${{ inputs.REQUIRE_TESTS_SUCCESS == 'false' }}
-        run: |
-          npm run "${TESTS_NPM_SCRIPT}"
+        run: npm run "${TESTS_NPM_SCRIPT}"
 
       - name: Release
         id: release
