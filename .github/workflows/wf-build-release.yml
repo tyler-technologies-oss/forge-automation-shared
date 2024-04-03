@@ -5,7 +5,7 @@ on:
     inputs:
       NODE_VERSION:
         description: "The version of Node to use when building the site."
-        default: "16"
+        default: "20"
         required: false
         type: string
       PRODUCTION_RELEASE:
@@ -104,21 +104,21 @@ jobs:
       - name: Set GitHub App Token
         id: app-token
         if: ${{ inputs.PRODUCTION_RELEASE }}
-        uses: tibdex/github-app-token@v1
+        uses: tibdex/github-app-token@v2.1
         with:
           app_id: ${{ secrets.GITHUB_APP_ID }}
           private_key: ${{ secrets.GITHUB_APP_KEY }}
 
       - name: Checkout Repo with App
         id: checkout-with-token
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         if: steps.app-token.outcome == 'success'
         with:
           # Checkout with github apps token.
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         if: steps.checkout-with-token.outcome == 'skipped'
         with:
           token: ${{ secrets.CHECKOUT_TOKEN }}
@@ -128,7 +128,7 @@ jobs:
         run: git fetch --unshallow --tags
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         env:
           NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
@@ -242,7 +242,7 @@ jobs:
           npm run "${PACKAGE_ASSETS_NPM_SCRIPT}"
 
       - name: Upload assets for deploy
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: steps.package-assets.outcome == 'success'
         with:
           name: ${{ inputs.PACKAGE_ASSETS_UPLOAD_NAME }}
