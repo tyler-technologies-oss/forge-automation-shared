@@ -5,7 +5,7 @@ on:
     inputs:
       NODE_VERSION:
         description: "The version of Node to use when building the site."
-        default: "16"
+        default: "20"
         required: false
         type: string
       NPM_INSTALL_COMMAND:
@@ -27,14 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare Repository
         # Fetch full git history and tags
         run: git fetch --unshallow --tags
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         env:
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"

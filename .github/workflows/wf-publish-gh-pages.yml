@@ -5,7 +5,7 @@ on:
     inputs:
       NODE_VERSION:
         description: "The version of Node to use when building the site."
-        default: "16"
+        default: "20"
         required: false
         type: string
       DEPLOY_BRANCH:
@@ -71,14 +71,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
       
       - name: Cache Dependencies
         id: cache
         if: ${{ inputs.CACHE_ENABLED }}
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         env:
           cache-name: cache-node-modules
         with:
@@ -90,7 +90,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         env:
           NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
@@ -133,7 +133,7 @@ jobs:
 
       - name: Deploy 🚀
         if: ${{ inputs.BUILD_ENABLED }}
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
           token: ${{ secrets.GITHUB_DEPLOY_TOKEN }}
           branch: ${{ inputs.DEPLOY_BRANCH }}
@@ -143,7 +143,7 @@ jobs:
 
       - name: Find Comment
         if: ${{ inputs.BUILD_ENABLED && ! inputs.PRODUCTION_RELEASE }}
-        uses: peter-evans/find-comment@v2
+        uses: peter-evans/find-comment@v3
         id: fc
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -152,7 +152,7 @@ jobs:
 
       - name: Create comment
         if: ${{ inputs.BUILD_ENABLED && ! inputs.PRODUCTION_RELEASE && steps.fc.outputs.comment-id == '' }}
-        uses: peter-evans/create-or-update-comment@v2
+        uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |

@@ -10,7 +10,7 @@ on:
     inputs:
       NODE_VERSION:
         description: "The version of Node to use when building the site."
-        default: "16"
+        default: "20"
         required: false
         type: string
       BUILD_ENABLED:
@@ -53,10 +53,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         env:
           NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
