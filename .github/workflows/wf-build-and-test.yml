@@ -60,6 +60,7 @@ jobs:
         env:
           NPM_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_PASSWORD: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
         with:
           node-version: ${{ inputs.NODE_VERSION }}
@@ -70,6 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_PASSWORD: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
         run: |
           npm ci
@@ -84,6 +86,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_PASSWORD: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           BUILD_NPM_SCRIPT: "${{ inputs.BUILD_NPM_SCRIPT }}"
         run: |
@@ -97,6 +100,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
+          ARTIFACTORY_PASSWORD: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           TESTS_NPM_SCRIPT: "${{ inputs.TESTS_NPM_SCRIPT }}"
           CONTINUE_ON_ERROR: ${{ inputs.REQUIRE_TESTS_SUCCESS == 'false' }}
