@@ -53,6 +53,10 @@ on:
         description: "The deployment path relative to the GitHub Pages root."
         type: string
         required: false
+      BASE_HREF:
+        description: "Passes this value to the 'BASE_HREF' environment variable during the 'build' phase."
+        type: string
+        required: false
 
     secrets:
       GITHUB_DEPLOY_TOKEN:
@@ -128,6 +132,7 @@ jobs:
           ARTIFACTORY_TOKEN: "${{ secrets.NPM_TOKEN }}"
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           BUILD_NPM_SCRIPT: "${{ inputs.BUILD_NPM_SCRIPT }}"
+          BASE_HREF: ${{ inputs.BASE_HREF }}
         run: |
           npm run "${BUILD_NPM_SCRIPT}"
 
