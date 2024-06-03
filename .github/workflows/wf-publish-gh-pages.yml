@@ -137,6 +137,7 @@ jobs:
           ARTIFACTORY_USERNAME: "${{ secrets.ARTIFACTORY_USERNAME }}"
           BUILD_NPM_SCRIPT: "${{ inputs.BUILD_NPM_SCRIPT }}"
           BASE_HREF: ${{ inputs.BASE_HREF }}
+          GIT_BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
           npm run "${BUILD_NPM_SCRIPT}"
 
